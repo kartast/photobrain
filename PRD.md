@@ -1,0 +1,1 @@
+project description: turn user's ios and android photo library into useful, indexed and connected structured data using llm
