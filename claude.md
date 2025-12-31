@@ -1,3 +1,4 @@
 # Claude Code Instructions
 
-This file contains instructions for Claude Code when working on this project.
+## todo.md
+if user ask to process todo.md, then look at todo.md, pick next incomplete task and complete it and mark as completed. then repeat for each incomplete tasks in todo.md
