@@ -15,6 +15,7 @@
 9. [Privacy and Security Requirements](#9-privacy-and-security-requirements)
 10. [Success Metrics](#10-success-metrics)
 11. [Client Framework Analysis](#11-client-framework-analysis)
+12. [LLM Server-Side Cost Analysis](#12-llm-server-side-cost-analysis)
 
 ---
 
@@ -962,6 +963,247 @@ For performance-critical features, Flutter supports platform channels to call na
 
 ---
 
-*Document Version: 1.1*
+## 12. LLM Server-Side Cost Analysis
+
+### 12.1 Overview
+
+This section analyzes LLM API costs and self-hosting options for PhotoBrain's server-side image analysis, optimized for a solo developer prioritizing cost efficiency and scalability.
+
+**Key Requirement:** PhotoBrain needs vision-capable LLMs to analyze photos and generate structured metadata (descriptions, objects, text extraction, mood, etc.).
+
+### 12.2 Cloud API Pricing Comparison (Vision Models)
+
+#### Premium Tier Models
+
+| Provider | Model | Input (per 1M tokens) | Output (per 1M tokens) | Vision Support |
+|----------|-------|----------------------|------------------------|----------------|
+| OpenAI | GPT-4o | $5.00 | $20.00 | Yes |
+| OpenAI | GPT-4.1 | $3.00-$12.00 | $12.00-$48.00 | Yes |
+| Anthropic | Claude 3.7 Sonnet | $3.00 | $15.00 | Yes |
+| Anthropic | Claude 3 Opus | $15.00 | $75.00 | Yes |
+| Google | Gemini 2.5 Pro | $1.25-$2.50 | $10.00-$15.00 | Yes |
+| xAI | Grok 4 | $3.00 | $25.00 | Yes |
+
+#### Budget Tier Models (Recommended for PhotoBrain)
+
+| Provider | Model | Input (per 1M tokens) | Output (per 1M tokens) | Vision Support |
+|----------|-------|----------------------|------------------------|----------------|
+| **Google** | **Gemini 2.5 Flash** | **$0.15** | **$0.60** | **Yes** |
+| OpenAI | GPT-4o mini | $0.15 | $0.60 | Yes |
+| Anthropic | Claude 3.5 Haiku | $0.80 | $4.00 | Yes |
+| xAI | Grok 4 Fast | $0.20 | $0.50 | Yes |
+| DeepSeek | DeepSeek-V3 | $0.28 | $0.42 | Limited |
+
+**Winner for Cost:** Gemini 2.5 Flash at $0.15/1M input offers the best value for vision tasks with full multimodal support.
+
+### 12.3 Cost Estimation for PhotoBrain
+
+#### Assumptions
+- Average photo analysis: ~500 input tokens (image + prompt), ~200 output tokens
+- Typical user library: 10,000 photos
+- Analysis frequency: One-time initial analysis + incremental for new photos
+
+#### Per-Photo Cost Estimates
+
+| Model | Cost per Photo | 10,000 Photos | 100,000 Photos |
+|-------|----------------|---------------|----------------|
+| GPT-4o | $0.0065 | $65 | $650 |
+| Claude 3.7 Sonnet | $0.0045 | $45 | $450 |
+| Gemini 2.5 Pro | $0.0027 | $27 | $270 |
+| **Gemini 2.5 Flash** | **$0.00020** | **$2** | **$20** |
+| GPT-4o mini | $0.00020 | $2 | $20 |
+| Claude 3.5 Haiku | $0.0012 | $12 | $120 |
+
+**Key Insight:** Using Gemini 2.5 Flash, analyzing 10,000 photos costs approximately $2. This is 30x cheaper than premium models.
+
+### 12.4 Cost Optimization Strategies
+
+#### 1. Batch Processing (50% Discount)
+
+Most providers offer batch APIs with 50% discount for async processing:
+
+| Provider | Batch Discount | Effective Cost (Gemini Flash) |
+|----------|----------------|------------------------------|
+| Google Gemini | 50% off | $0.075/1M input |
+| OpenAI | 50% off | $0.075/1M input (mini) |
+| AWS Bedrock | 50% off (Claude) | $0.40/1M input |
+
+**PhotoBrain Strategy:** Process photos during off-peak hours using batch APIs. No real-time requirement for initial library analysis.
+
+#### 2. Prompt Caching (90% Discount on Cached Prompts)
+
+| Provider | Cache Hit Rate | Effective Savings |
+|----------|----------------|-------------------|
+| Anthropic | 90% off cached input | Major for repeated prompts |
+| DeepSeek | 90% off cache hits | $0.028/1M for cached |
+| OpenAI | Coming in 2025 | TBD |
+
+**PhotoBrain Strategy:** Use identical system prompts for all photo analysis. Cache the analysis prompt to reduce costs by 90% on repeated calls.
+
+#### 3. Tiered Model Approach
+
+| Task | Recommended Model | Rationale |
+|------|-------------------|-----------|
+| Basic scene/object detection | Gemini Flash / GPT-4o mini | High volume, low complexity |
+| Detailed descriptions | Gemini Pro / Claude Sonnet | Higher quality when needed |
+| Complex reasoning (connections) | Claude Opus / GPT-4o | Reserved for 5% of tasks |
+
+**Savings:** Using tiered approach saves 60-90% vs using premium model for everything.
+
+### 12.5 Self-Hosted LLM Analysis
+
+#### GPU Cloud Rental Costs (2025)
+
+| GPU | Provider | Hourly Cost | VRAM | Suitable For |
+|-----|----------|-------------|------|--------------|
+| RTX 4090 | RunPod | $0.34-0.59/hr | 24GB | LLaVA 7B-13B |
+| A100 40GB | Lambda Labs | $1.29/hr | 40GB | LLaVA 34B |
+| A100 80GB | TensorDock | $0.75-2.17/hr | 80GB | Large models |
+| H100 | Vast.ai | $1.87-2.99/hr | 80GB | Maximum performance |
+
+#### Self-Hosted Vision Model Options
+
+| Model | Parameters | VRAM Required | Inference Speed | Quality |
+|-------|------------|---------------|-----------------|---------|
+| LLaVA 1.5 7B | 7B | 12-16GB | ~2 photos/sec | Good |
+| LLaVA 1.6 13B | 13B | 24GB | ~1 photo/sec | Very Good |
+| LLaVA-NeXT 34B | 34B | 40GB | ~0.5 photos/sec | Excellent |
+| Qwen-VL | 7B | 16GB | ~2 photos/sec | Good |
+
+#### Break-Even Analysis: Self-Hosted vs Cloud API
+
+**Scenario: Processing 10,000 photos**
+
+| Approach | Cost Calculation | Total Cost |
+|----------|------------------|------------|
+| **Gemini Flash API** | 10K photos x $0.0002 | **$2** |
+| **Self-Hosted (RTX 4090)** | 10K photos / 2 per sec = 1.4 hrs x $0.59 | **$0.83** |
+| **Self-Hosted (A100)** | 10K photos / 1 per sec = 2.8 hrs x $1.29 | **$3.61** |
+
+**Break-Even Point:** Self-hosting becomes cost-effective at ~50,000+ photos per month with sustained usage. For PhotoBrain's typical usage pattern (one-time analysis + incremental), cloud APIs are more cost-effective.
+
+#### When Self-Hosting Makes Sense
+
+| Scenario | Recommendation |
+|----------|----------------|
+| < 100K photos/month | Use Cloud API (Gemini Flash) |
+| 100K-500K photos/month | Consider self-hosted on RTX 4090 |
+| > 500K photos/month | Self-hosted on A100/H100 cluster |
+| Privacy requirements | Self-hosted mandatory |
+| Offline requirements | Self-hosted mandatory |
+
+### 12.6 Serverless vs Dedicated Architecture
+
+#### For Solo Developer: Recommended Approach
+
+| Phase | Architecture | Rationale |
+|-------|--------------|-----------|
+| **MVP (0-1K users)** | Serverless API calls | Zero infrastructure, pay-per-use |
+| **Growth (1K-10K users)** | Serverless with caching | Add caching layer, batch processing |
+| **Scale (10K+ users)** | Hybrid serverless + dedicated | Reserved capacity for base load |
+
+#### Serverless Platform Options
+
+| Platform | Specialty | Pricing Model | Best For |
+|----------|-----------|---------------|----------|
+| Modal | GPU serverless | Pay-per-second | Variable workloads |
+| RunPod Serverless | GPU inference | Pay-per-request | Burst processing |
+| Replicate | Model hosting | Per-prediction | Easy deployment |
+| AWS Lambda | General serverless | Per-invocation | API orchestration |
+
+### 12.7 Recommended Architecture for PhotoBrain
+
+#### Phase 1: MVP (Solo Developer, First 6 Months)
+
+```
+Mobile App --> API Gateway (Serverless)
+                    |
+                    v
+            Gemini Flash API
+                    |
+                    v
+            SQLite (on-device)
+```
+
+**Monthly Cost Estimate (1,000 active users, 10K photos each):**
+- API Gateway: ~$5-10/month (AWS/GCP free tier covers most)
+- LLM API: 10M photos x $0.0002 = $2,000/month
+- With batch + caching: ~$500-800/month
+
+#### Phase 2: Scaling (10,000+ Users)
+
+```
+Mobile App --> API Gateway --> Request Queue
+                                    |
+                    +---------------+---------------+
+                    |               |               |
+                    v               v               v
+            Gemini Flash     Self-Hosted      Premium Model
+            (80% traffic)    LLaVA (15%)      (5% complex)
+```
+
+**Cost Optimization:**
+- Route 80% of simple requests to cheapest API
+- Self-host for baseline capacity
+- Reserve premium models for complex analysis
+
+### 12.8 Provider Comparison Summary
+
+| Criterion | Gemini Flash | GPT-4o mini | Claude Haiku | Self-Hosted |
+|-----------|--------------|-------------|--------------|-------------|
+| **Cost (10K photos)** | $2 | $2 | $12 | $0.83-3.61 |
+| **Quality** | Very Good | Very Good | Good | Varies |
+| **Latency** | Low | Low | Low | Lowest |
+| **Batch Support** | Yes (50% off) | Yes (50% off) | Yes | N/A |
+| **Solo Dev Complexity** | Very Low | Very Low | Very Low | High |
+| **Scalability** | Excellent | Excellent | Excellent | Manual |
+| **Privacy** | Cloud | Cloud | Cloud | Full Control |
+
+### 12.9 Recommendation for PhotoBrain
+
+#### Primary Recommendation: Gemini 2.5 Flash API
+
+For a solo developer, **Google Gemini 2.5 Flash** is the recommended LLM provider:
+
+1. **Lowest Cost:** At $0.15/1M input tokens, it is the cheapest vision-capable model from a major provider.
+
+2. **Full Vision Support:** Native multimodal capabilities for image analysis without additional complexity.
+
+3. **Batch Processing:** 50% discount for async processing perfectly matches PhotoBrain's use case.
+
+4. **1M Token Context:** Can process multiple images in a single request for efficiency.
+
+5. **Zero Infrastructure:** No servers to manage, scales automatically.
+
+6. **Free Tier Available:** Google offers generous free tier for development and testing.
+
+#### Cost Projection (First Year)
+
+| Phase | Users | Photos/Month | Monthly Cost | Annual Cost |
+|-------|-------|--------------|--------------|-------------|
+| Beta | 100 | 100K | ~$20 | $240 |
+| Launch | 1,000 | 1M | ~$200 | $2,400 |
+| Growth | 5,000 | 5M | ~$500 (with optimization) | $6,000 |
+| Scale | 10,000 | 10M | ~$800 (hybrid approach) | $9,600 |
+
+#### Fallback Strategy
+
+If Gemini pricing changes or quality is insufficient:
+1. **OpenAI GPT-4o mini** - Same price point, different provider
+2. **Claude 3.5 Haiku** - Higher quality, 4x cost
+3. **Self-hosted LLaVA** - Full control, higher complexity
+
+### 12.10 Implementation Checklist
+
+- [ ] Set up Google Cloud account with Gemini API access
+- [ ] Implement batch processing pipeline for initial library analysis
+- [ ] Add prompt caching for recurring analysis prompts
+- [ ] Monitor costs with per-user tracking
+- [ ] Implement tiered model routing as usage grows
+- [ ] Plan migration path to self-hosted for privacy features
+
+---
+
+*Document Version: 1.2*
 *Last Updated: January 2025*
 *Status: Draft*

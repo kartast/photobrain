@@ -17,4 +17,4 @@
 - [x] PRD: Define privacy and security requirements
 - [x] PRD: Compile all sections into PRD.md
 - [x] PRD research and compare client frameworks options like flutter, native or react native
-- [ ] PRD research cost of LlM on server side and compare between wide variety of options and scalavility, optimize for cost and single dev
+- [x] PRD research cost of LlM on server side and compare between wide variety of options and scalavility, optimize for cost and single dev
