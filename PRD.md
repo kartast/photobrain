@@ -205,6 +205,21 @@ PhotoBrain provides an intelligent layer that:
 - Track personal growth and changes
 - "Show my journey through 2024"
 
+#### Personal Notes & Annotations
+
+**Photo Notes**
+- Add personal notes to any photo
+- Multiple notes per photo with timestamps
+- Rich text support (formatting, links)
+- Search across all notes
+- "Find photos where I mentioned 'recipe'"
+
+**Memory Context**
+- Record stories behind the photo
+- Add context that LLM can't detect (who took it, inside jokes)
+- Link notes to specific people or events
+- Voice-to-text note capture for quick input
+
 ## 3. Core Features
 
 ### 3.1 Photo Import & Sync
@@ -275,10 +290,18 @@ PhotoBrain provides an intelligent layer that:
 - Download assets on-demand for analysis
 - Handle network availability gracefully
 
-**CloudKit Sync (Optional)**
-- Sync metadata across user's devices
-- Use private CloudKit database for user data
-- Implement conflict resolution for concurrent edits
+**iCloud Data Sync**
+- Sync PhotoBrain metadata via iCloud Documents or CloudKit
+- User's own iCloud account (no backend needed)
+- Private CloudKit database for user data
+- Automatic sync across user's iOS/macOS devices
+- Conflict resolution for concurrent edits
+
+**What Syncs:**
+- SQLite database with all metadata
+- Embeddings (~3KB per photo)
+- User notes and albums
+- NOT photos (already in iCloud Photos)
 
 ### 4.3 iOS Platform Considerations
 
@@ -327,7 +350,21 @@ PhotoBrain provides an intelligent layer that:
 - Download originals for analysis when needed
 - Respect API quota limits and rate limiting
 
-### 5.3 Android Platform Considerations
+### 5.3 Google Drive Data Sync
+
+**Metadata Sync**
+- Sync PhotoBrain metadata via Google Drive API
+- User's own Google account (no backend needed)
+- Store SQLite database in app-specific Drive folder
+- Automatic sync across user's Android devices
+
+**What Syncs:**
+- SQLite database with all metadata
+- Embeddings (~3KB per photo)
+- User notes and albums
+- NOT photos (already in Google Photos)
+
+### 5.4 Android Platform Considerations
 
 **Background Processing**
 - Use `WorkManager` for reliable background tasks
@@ -442,7 +479,14 @@ Photo
     "hidden": false,
     "albums": ["Summer 2024", "Friends"],
     "custom_tags": ["best shots"],
-    "notes": "John's birthday picnic"
+    "notes": [
+      {
+        "id": "uuid-v4",
+        "content": "John's birthday picnic - he loved the cake!",
+        "created_at": "ISO8601",
+        "updated_at": "ISO8601"
+      }
+    ]
   }
 }
 ```
@@ -457,10 +501,11 @@ Photo
 - `embeddings`: Vector embeddings for similarity search
 - `albums`: User-created and auto-generated albums
 - `tags`: Normalized tag lookup table
+- `notes`: User notes linked to photos (photo_id, content, timestamps)
 
 **Indexes**
 - Composite index on (capture_date, location)
-- Full-text search on description and tags
+- Full-text search on description, tags, and user notes
 - Vector index on embeddings (using sqlite-vec or similar)
 
 ## 7. LLM Integration Approach
@@ -507,7 +552,37 @@ Photo
 - Inference: < 2 seconds per photo on target devices
 - Memory: < 200MB during inference
 
-### 7.4 Cloud API Integration
+### 7.4 Client-Side Vector Search
+
+**Cloud-Based Embedding Generation**
+- Get embeddings from Gemini API alongside analysis
+- Request text-embedding-004 or gemini embedding model
+- Generate 768-dim vectors per photo
+- Single API call for analysis + embedding
+- Store embeddings locally in SQLite
+
+**Local Vector Storage & Search**
+- sqlite-vec for cross-platform vector storage
+- iOS: Accelerate framework for SIMD operations
+- Android: sqlite-vec via FFI
+
+**Search Capabilities**
+- "Find similar photos" from any photo
+- Text-to-image search (embed query text)
+- Visual duplicate detection
+- Clustering for auto-albums
+
+**Performance Targets**
+- Vector search (10K photos): < 50ms
+- Index size: ~3KB per photo (768 floats)
+
+**Hybrid Approach**
+- Embeddings generated in cloud (with LLM analysis)
+- Search runs entirely on-device
+- Works offline after initial sync
+- No repeated API calls for search
+
+### 7.5 Cloud API Integration
 
 **Provider Options**
 - OpenAI GPT-4V / GPT-4o
@@ -534,7 +609,7 @@ POST /analyze
 - Caching of analysis results
 - User-configurable analysis depth
 
-### 7.5 Embedding Strategy
+### 7.6 Embedding Strategy
 
 **Purpose**
 - Semantic similarity search
@@ -551,61 +626,58 @@ POST /analyze
 
 ### 8.1 System Architecture
 
+**Client-First Architecture** - Minimal backend, data stays on device.
+
 ```
-┌──────────────────────────────┐
-│      PhotoBrain App          │
-├──────────────────────────────┤
-│                              │
-│  ╔════ UI Layer ════════╗    │
-│  ║ • Photo Browser      ║    │
-│  ║ • Search UI          ║    │
-│  ║ • Settings/Sync      ║    │
-│  ╚══════════════════════╝    │
-│            │                 │
-│            ▼                 │
-│  ╔════ Application ═════╗    │
-│  ║ • Photo Manager      ║    │
-│  ║ • Search Engine      ║    │
-│  ║ • Album Manager      ║    │
-│  ║ • Export Service     ║    │
-│  ╚══════════════════════╝    │
-│            │                 │
-│            ▼                 │
-│  ╔════ Processing ══════╗    │
-│  ║ • Import Pipeline    ║    │
-│  ║ • Metadata Extractor ║    │
-│  ║ • LLM Analyzer       ║    │
-│  ║ • Connection Builder ║    │
-│  ╚══════════════════════╝    │
-│            │                 │
-│            ▼                 │
-│  ╔════ Data Layer ══════╗    │
-│  ║ • SQLite Database    ║    │
-│  ║ • Vector Store       ║    │
-│  ║ • File Cache         ║    │
-│  ╚══════════════════════╝    │
-│                              │
-├──────────────────────────────┤
-│  Platform Layer              │
-│  ┌────────────────────────┐  │
-│  │ iOS: PhotoKit, CoreML, │  │
-│  │      CloudKit          │  │
-│  ├────────────────────────┤  │
-│  │ Android: MediaStore,   │  │
-│  │          TFLite, Room  │  │
-│  └────────────────────────┘  │
-└──────────────────────────────┘
-            │
-            ▼
-┌──────────────────────────────┐
-│  Cloud Services (Optional)   │
-│  ┌────────────────────────┐  │
-│  │ • LLM API (Vision)     │  │
-│  │ • Sync API (Backup)    │  │
-│  │ • Geocoding API        │  │
-│  └────────────────────────┘  │
-└──────────────────────────────┘
+┌─────────────────────────────────┐
+│        PhotoBrain App           │
+├─────────────────────────────────┤
+│  UI Layer                       │
+│  • Photo Browser                │
+│  • Search UI                    │
+│  • Settings                     │
+├─────────────────────────────────┤
+│  Application Layer              │
+│  • Photo Manager                │
+│  • Search Engine                │
+│  • Album Manager                │
+├─────────────────────────────────┤
+│  Processing Layer               │
+│  • Import Pipeline              │
+│  • Metadata Extractor           │
+│  • LLM Analyzer                 │
+├─────────────────────────────────┤
+│  Data Layer (Local)             │
+│  • SQLite + sqlite-vec          │
+│  • All metadata stored locally  │
+│  • Embeddings stored locally    │
+├─────────────────────────────────┤
+│  Platform Layer                 │
+│  • iOS: PhotoKit                │
+│  • Android: MediaStore          │
+└─────────────────────────────────┘
+        │                │
+        ▼                ▼
+┌───────────────┐  ┌──────────────┐
+│ PhotoBrain    │  │ User's Cloud │
+│ API Proxy     │  │ (Data Sync)  │
+│               │  │              │
+│ • Auth/Sub    │  │ iOS: iCloud  │
+│ • Gemini call │  │ Android:     │
+│ • Rate limit  │  │ Google Drive │
+└───────────────┘  └──────────────┘
+        │
+        ▼
+┌───────────────┐
+│ Gemini API    │
+└───────────────┘
 ```
+
+**Key Principles:**
+- All user data stored on device (not on server)
+- Proxy server handles auth + LLM API calls
+- Cloud sync via user's own iCloud/Drive
+- Subscription model for API access
 
 ### 8.2 Data Flow
 
@@ -1113,39 +1185,60 @@ Most providers offer batch APIs with 50% discount for async processing:
 
 ### 12.7 Recommended Architecture for PhotoBrain
 
+#### Business Model: Subscription + Proxy Server
+
+**How It Works:**
+- User subscribes (monthly/yearly)
+- App sends photos to PhotoBrain proxy server
+- Proxy validates subscription, calls Gemini API
+- Results returned to app, stored locally
+- No user photos stored on server
+
 #### Phase 1: MVP (Solo Developer, First 6 Months)
 
 ```
-Mobile App --> API Gateway (Serverless)
-                    |
-                    v
-            Gemini Flash API
-                    |
-                    v
-            SQLite (on-device)
+Mobile App --> PhotoBrain Proxy --> Gemini Flash API
+                    │
+                    ├── Auth (validate subscription)
+                    ├── Rate limiting
+                    └── Usage tracking
 ```
 
-**Monthly Cost Estimate (1,000 active users, 10K photos each):**
-- API Gateway: ~$5-10/month (AWS/GCP free tier covers most)
-- LLM API: 10M photos x $0.0002 = $2,000/month
-- With batch + caching: ~$500-800/month
+**Proxy Server Stack (Minimal):**
+- Cloudflare Workers or Vercel Edge Functions
+- Stripe for subscriptions
+- Simple auth (JWT or API key per user)
+
+**Monthly Cost Estimate (1,000 subscribers):**
+- Proxy hosting: ~$0-20/month (serverless free tier)
+- Stripe fees: 2.9% + $0.30 per transaction
+- LLM API: Based on usage, ~$500-800/month
+- **Revenue needed**: ~$1-2/user/month to break even
 
 #### Phase 2: Scaling (10,000+ Users)
 
 ```
-Mobile App --> API Gateway --> Request Queue
-                                    |
-                    +---------------+---------------+
-                    |               |               |
-                    v               v               v
-            Gemini Flash     Self-Hosted      Premium Model
-            (80% traffic)    LLaVA (15%)      (5% complex)
+Mobile App --> PhotoBrain Proxy --> Load Balancer
+                                          │
+                          +---------------+---------------+
+                          │               │               │
+                          v               v               v
+                  Gemini Flash     Self-Hosted      Premium Model
+                  (80% traffic)    LLaVA (15%)      (5% complex)
 ```
 
 **Cost Optimization:**
 - Route 80% of simple requests to cheapest API
-- Self-host for baseline capacity
+- Self-host for baseline capacity (reduces per-photo cost)
 - Reserve premium models for complex analysis
+
+#### Subscription Tiers (Example)
+
+| Tier | Price | Photos/Month | Features |
+|------|-------|--------------|----------|
+| Free | $0 | 100 | Basic analysis |
+| Pro | $4.99/mo | 5,000 | Full analysis + embeddings |
+| Unlimited | $9.99/mo | Unlimited | Priority processing |
 
 ### 12.8 Provider Comparison Summary
 
