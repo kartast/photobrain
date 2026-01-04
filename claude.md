@@ -3,7 +3,7 @@
 ## PR Submission (IMPORTANT)
 When creating or updating a PR:
 1. Squash all commits into a single commit for easier review
-2. Run `flutter build web --release` before the final commit
+2. Run `flutter build web` after each commit when Claude Code web is working
 3. Include web build: `git add -f build/web`
 4. Use a clear, descriptive commit message summarizing all changes
 
