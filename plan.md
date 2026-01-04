@@ -11,6 +11,7 @@ MVP delivery based on PRD decisions:
 - **Sync**: iCloud / Google Drive
 - **Backend**: Proxy server for LLM API
 - **Monetization**: Subscription
+- **CI/CD**: Codemagic (build iOS/Android from Linux)
 
 ---
 
@@ -376,27 +377,87 @@ Week 11-13
 - [ ] Privacy policy
 - [ ] Terms of service
 
-### 10.2 iOS
+### 10.2 CI/CD Setup (Codemagic)
 
-- [ ] App Store Connect
-- [ ] TestFlight
-- [ ] Review compliance
-- [ ] Permission rationale
+**Why Codemagic:** Build iOS from Linux, 500 free min/month, Flutter-first.
 
-### 10.3 Android
+**Prerequisites:**
+- [ ] Apple Developer Account ($99/year)
+- [ ] Google Play Developer Account ($25 one-time)
+- [ ] Codemagic account (free)
 
-- [ ] Play Console
-- [ ] Internal testing
-- [ ] Store listing
-- [ ] Content rating
+**iOS Setup:**
+- [ ] App Store Connect API key (.p8)
+- [ ] Bundle identifier registration
+- [ ] Connect Codemagic to App Store Connect
+
+**Android Setup:**
+- [ ] Generate release keystore
+- [ ] Google Play service account JSON
+- [ ] Upload signing credentials to Codemagic
+
+**Workflows:**
+- [ ] `ios-release`: Push to main → TestFlight
+- [ ] `android-release`: Push to main → Play Store Internal
+- [ ] `pr-check`: PR → Run tests only
+
+**codemagic.yaml:**
+```yaml
+workflows:
+  ios-release:
+    name: iOS Release
+    instance_type: mac_mini_m2
+    environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.yourcompany.photobrain
+      flutter: stable
+    scripts:
+      - flutter pub get
+      - flutter test
+      - cd ios && pod install
+      - flutter build ipa --release
+    publishing:
+      app_store_connect:
+        submit_to_testflight: true
+
+  android-release:
+    name: Android Release
+    instance_type: linux_x2
+    environment:
+      flutter: stable
+    scripts:
+      - flutter pub get
+      - flutter test
+      - flutter build appbundle --release
+    publishing:
+      google_play:
+        track: internal
+```
+
+**Cost:** Free tier (500 min) ≈ 25 iOS builds/month. Pay-as-you-go ~$30/month.
+
+### 10.3 Store Setup
+
+**iOS:**
+- [ ] App Store Connect app listing
+- [ ] TestFlight beta groups
+- [ ] Review compliance checklist
+- [ ] Permission rationale strings
+
+**Android:**
+- [ ] Play Console app listing
+- [ ] Internal testing track
+- [ ] Content rating questionnaire
+- [ ] Data safety form
 
 ### 10.4 Launch
 
-- [ ] Beta feedback
-- [ ] Bug fixes
+- [ ] Beta feedback collection
+- [ ] Bug fixes from beta
 - [ ] Submit for review
-- [ ] Monitor crashes
-- [ ] User feedback
+- [ ] Monitor crash reports
+- [ ] User feedback loop
 
 ---
 
@@ -421,6 +482,7 @@ Week 11-13
 | photo_detail_screen.dart | Viewer |
 | search_screen.dart | Search UI |
 | subscription_screen.dart | Manage sub |
+| codemagic.yaml | CI/CD config |
 
 **Proxy Server:**
 
