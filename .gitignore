@@ -6,15 +6,13 @@ __pycache__/
 # C extensions
 *.so
 
-# Distribution / packaging
+# Distribution / packaging (Python)
 .Python
-build/
 develop-eggs/
 dist/
 downloads/
 eggs/
 .eggs/
-lib/
 lib64/
 parts/
 sdist/
@@ -129,3 +127,14 @@ dmypy.json
 # OS
 .DS_Store
 Thumbs.db
+
+# Flutter
+.dart_tool/
+.packages
+build/
+!build/web/
+*.iml
+.flutter-plugins
+.flutter-plugins-dependencies
+.metadata
+pubspec.lock
