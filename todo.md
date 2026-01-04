@@ -18,3 +18,5 @@
 - [x] PRD: Compile all sections into PRD.md
 - [x] PRD research and compare client frameworks options like flutter, native or react native
 - [x] PRD research cost of LlM on server side and compare between wide variety of options and scalavility, optimize for cost and single dev
+- [x] Plan sqlite-vec cloud sync strategy for iCloud (iOS) and Google Drive (Android)
+- [x] Compare native (SwiftUI + Kotlin) vs Flutter for cloud sync implementation
